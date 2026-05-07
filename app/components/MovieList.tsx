@@ -1,34 +1,39 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Spin, Alert } from 'antd';
+import { Spin, Alert, Pagination } from 'antd';
 import { fetchMovies } from '@/app/lib/moviedb';
 import { MovieCard } from './MovieCard';
 import type { Movie } from '@/app/types/movie';
 
 interface MovieListProps {
-  query?: string;
+  query: string;
 }
 
-export function MovieList({ query = 'return' }: MovieListProps) {
+export function MovieList({ query }: MovieListProps) {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
-
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     setIsOffline(!navigator.onLine);
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // При смене запроса сбрасываем страницу на 1
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
 
   useEffect(() => {
     if (isOffline) {
@@ -43,8 +48,11 @@ export function MovieList({ query = 'return' }: MovieListProps) {
       setError(null);
 
       try {
-        const data = await fetchMovies(query);
-        if (!cancelled) setMovies(data.results);
+        const data = await fetchMovies(query || 'return', page);
+        if (!cancelled) {
+          setMovies(data.results);
+          setTotalResults(data.total_results);
+        }
       } catch (err) {
         if (!cancelled) {
           if (!navigator.onLine) {
@@ -59,8 +67,10 @@ export function MovieList({ query = 'return' }: MovieListProps) {
     }
 
     loadMovies();
-    return () => { cancelled = true; };
-  }, [query, isOffline]);
+    return () => {
+      cancelled = true;
+    };
+  }, [query, page, isOffline]);
 
   if (isOffline) {
     return (
@@ -82,14 +92,7 @@ export function MovieList({ query = 'return' }: MovieListProps) {
   }
 
   if (error) {
-    return (
-      <Alert
-        type="error"
-        showIcon
-        message="Failed to load movies"
-        description={error}
-      />
-    );
+    return <Alert type="error" showIcon message="Failed to load movies" description={error} />;
   }
 
   if (movies.length === 0) {
@@ -104,10 +107,25 @@ export function MovieList({ query = 'return' }: MovieListProps) {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 32 }}>
-      {movies.map((movie) => (
-        <MovieCard key={movie.id} movie={movie} />
-      ))}
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 32 }}>
+        {movies.map((movie) => (
+          <MovieCard key={movie.id} movie={movie} />
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 32 }}>
+        <Pagination
+          current={page}
+          total={totalResults}
+          pageSize={20}
+          onChange={(newPage) => {
+            setPage(newPage);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          showSizeChanger={false}
+        />
+      </div>
     </div>
   );
 }
