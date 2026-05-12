@@ -1,23 +1,23 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
 import { format } from 'date-fns';
 import { Tag, Rate, message } from 'antd';
 import type { Movie } from '@/app/types/movie';
 import { IMAGE_BASE_URL, IMAGE_PLACEHOLDER, addRating } from '@/app/lib/moviedb';
 import { truncateText } from '@/app/lib/truncateText';
 import { getRatingColor } from '@/app/lib/getRatingColor';
-
-const PLACEHOLDER_GENRES = ['Action', 'Drama'];
+import { useGenres } from '@/app/context/GenreContext';
+import { useSession } from '@/app/context/SessionContext';
 
 interface MovieCardProps {
   movie: Movie;
+  userRating?: number;
+  onRate?: (movieId: number, rating: number) => void;
 }
 
 function RatingCircle({ rating }: { rating: number }) {
   const color = getRatingColor(rating);
-  const display = rating.toFixed(1);
 
   return (
     <div
@@ -33,13 +33,16 @@ function RatingCircle({ rating }: { rating: number }) {
         flexShrink: 0,
       }}
     >
-      <span style={{ color: '#000', fontSize: 12, fontWeight: 700 }}>{display}</span>
+      <span style={{ color: '#000', fontSize: 12, fontWeight: 700 }}>
+        {rating.toFixed(1)}
+      </span>
     </div>
   );
 }
 
-export function MovieCard({ movie }: MovieCardProps) {
-  const [userRating, setUserRating] = useState<number>(0);
+export function MovieCard({ movie, userRating = 0, onRate }: MovieCardProps) {
+  const { getGenreName } = useGenres();
+  const { guestSessionId } = useSession();
   const [messageApi, contextHolder] = message.useMessage();
 
   const posterUrl = movie.poster_path
@@ -53,9 +56,10 @@ export function MovieCard({ movie }: MovieCardProps) {
   const description = truncateText(movie.overview || 'No description available.', 200);
 
   async function handleRating(value: number) {
-    setUserRating(value);
+    if (!guestSessionId) return;
     try {
-      await addRating(movie.id, value);
+      await addRating(movie.id, value, guestSessionId);
+      onRate?.(movie.id, value);
       messageApi.success('Rating saved!');
     } catch {
       messageApi.error('Failed to save rating');
@@ -75,7 +79,6 @@ export function MovieCard({ movie }: MovieCardProps) {
           minHeight: 279,
         }}
       >
-
         <div style={{ position: 'relative', width: 183, flexShrink: 0 }}>
           <Image
             src={posterUrl}
@@ -87,7 +90,6 @@ export function MovieCard({ movie }: MovieCardProps) {
           />
         </div>
 
-
         <div
           style={{
             padding: '16px 16px 12px',
@@ -97,7 +99,6 @@ export function MovieCard({ movie }: MovieCardProps) {
             minWidth: 0,
           }}
         >
-
           <div
             style={{
               display: 'flex',
@@ -126,9 +127,9 @@ export function MovieCard({ movie }: MovieCardProps) {
           </p>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-            {PLACEHOLDER_GENRES.map((genre) => (
-              <Tag key={genre} style={{ margin: 0, borderRadius: 2, fontSize: 12 }}>
-                {genre}
+            {movie.genre_ids.map((id) => (
+              <Tag key={id} style={{ margin: 0, borderRadius: 2, fontSize: 12 }}>
+                {getGenreName(id)}
               </Tag>
             ))}
           </div>

@@ -7,9 +7,10 @@ import debounce from 'lodash/debounce';
 interface HeaderProps {
   onSearch: (query: string) => void;
   onTabChange: (tab: string) => void;
+  activeTab: string;
 }
 
-export function Header({ onSearch, onTabChange }: HeaderProps) {
+export function Header({ onSearch, onTabChange, activeTab }: HeaderProps) {
   const debouncedSearch = useRef(
     debounce((value: string) => {
       onSearch(value);
@@ -19,7 +20,7 @@ export function Header({ onSearch, onTabChange }: HeaderProps) {
   return (
     <div style={{ padding: '0 16px' }}>
       <Tabs
-        defaultActiveKey="search"
+        activeKey={activeTab}
         centered
         onChange={onTabChange}
         items={[
@@ -29,15 +30,17 @@ export function Header({ onSearch, onTabChange }: HeaderProps) {
         style={{ marginBottom: 0 }}
       />
 
-      <div style={{ paddingBottom: 16 }}>
-        <Input
-          placeholder="Type to search..."
-          style={{ width: '100%' }}
-          size="large"
-          onChange={(e) => debouncedSearch(e.target.value)}
-          allowClear
-        />
-      </div>
+      {activeTab === 'search' && (
+        <div style={{ paddingBottom: 16 }}>
+          <Input
+            placeholder="Type to search..."
+            style={{ width: '100%' }}
+            size="large"
+            onChange={(e) => debouncedSearch(e.target.value)}
+            allowClear
+          />
+        </div>
+      )}
     </div>
   );
 }
