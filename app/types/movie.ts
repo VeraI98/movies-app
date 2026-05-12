@@ -7,6 +7,7 @@ export interface Movie {
   vote_count: number;
   poster_path: string | null;
   genre_ids: number[];
+  rating?: number;
 }
 
 export interface MoviesResponse {

@@ -15,9 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AntdRegistry>
           <SessionProvider>
-            <GenreProvider>
-              {children}
-            </GenreProvider>
+            <GenreProvider>{children}</GenreProvider>
           </SessionProvider>
         </AntdRegistry>
       </body>

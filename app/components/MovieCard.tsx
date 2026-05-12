@@ -33,9 +33,7 @@ function RatingCircle({ rating }: { rating: number }) {
         flexShrink: 0,
       }}
     >
-      <span style={{ color: '#000', fontSize: 12, fontWeight: 700 }}>
-        {rating.toFixed(1)}
-      </span>
+      <span style={{ color: '#000', fontSize: 12, fontWeight: 700 }}>{rating.toFixed(1)}</span>
     </div>
   );
 }
@@ -45,9 +43,7 @@ export function MovieCard({ movie, userRating = 0, onRate }: MovieCardProps) {
   const { guestSessionId } = useSession();
   const [messageApi, contextHolder] = message.useMessage();
 
-  const posterUrl = movie.poster_path
-    ? `${IMAGE_BASE_URL}${movie.poster_path}`
-    : IMAGE_PLACEHOLDER;
+  const posterUrl = movie.poster_path ? `${IMAGE_BASE_URL}${movie.poster_path}` : IMAGE_PLACEHOLDER;
 
   const releaseDate = movie.release_date
     ? format(new Date(movie.release_date), 'MMMM d, yyyy')
@@ -122,9 +118,7 @@ export function MovieCard({ movie, userRating = 0, onRate }: MovieCardProps) {
             <RatingCircle rating={movie.vote_average} />
           </div>
 
-          <p style={{ color: '#827E7E', fontSize: 12, margin: '0 0 8px' }}>
-            {releaseDate}
-          </p>
+          <p style={{ color: '#827E7E', fontSize: 12, margin: '0 0 8px' }}>{releaseDate}</p>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
             {movie.genre_ids.map((id) => (

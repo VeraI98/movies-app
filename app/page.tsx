@@ -18,11 +18,7 @@ export default function HomePage() {
           minHeight: '100vh',
         }}
       >
-        <Header
-          onSearch={setQuery}
-          onTabChange={setTab}
-          activeTab={tab}
-        />
+        <Header onSearch={setQuery} onTabChange={setTab} activeTab={tab} />
         <main style={{ padding: '32px 16px' }}>
           <MovieList query={query} tab={tab} />
         </main>

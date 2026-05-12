@@ -80,7 +80,9 @@ export function MovieList({ query, tab }: MovieListProps) {
     }
 
     loadMovies();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [query, page, tab, isOffline, guestSessionId]);
 
   function handleRate(movieId: number, rating: number) {
@@ -88,7 +90,14 @@ export function MovieList({ query, tab }: MovieListProps) {
   }
 
   if (isOffline) {
-    return <Alert type="warning" showIcon title="No internet connection" description="Please check your network connection and try again." />;
+    return (
+      <Alert
+        type="warning"
+        showIcon
+        title="No internet connection"
+        description="Please check your network connection and try again."
+      />
+    );
   }
 
   if (error) {

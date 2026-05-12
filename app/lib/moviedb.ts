@@ -6,9 +6,7 @@ export const IMAGE_PLACEHOLDER = '/no-poster.png';
 
 export async function createGuestSession(): Promise<string> {
   const API_KEY = process.env.NEXT_PUBLIC_MOVIEDB_API_KEY ?? '';
-  const res = await fetch(
-    `${BASE_URL}/authentication/guest_session/new?api_key=${API_KEY}`,
-  );
+  const res = await fetch(`${BASE_URL}/authentication/guest_session/new?api_key=${API_KEY}`);
   const data = await res.json();
   return data.guest_session_id;
 }
@@ -37,9 +35,7 @@ export async function fetchRatedMovies(
 
 export async function fetchGenres(): Promise<{ id: number; name: string }[]> {
   const API_KEY = process.env.NEXT_PUBLIC_MOVIEDB_API_KEY ?? '';
-  const res = await fetch(
-    `${BASE_URL}/genre/movie/list?api_key=${API_KEY}&language=en`,
-  );
+  const res = await fetch(`${BASE_URL}/genre/movie/list?api_key=${API_KEY}&language=en`);
   const data = await res.json();
   return data.genres;
 }
