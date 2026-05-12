@@ -30,7 +30,6 @@ export function MovieList({ query }: MovieListProps) {
     };
   }, []);
 
-  // При смене запроса сбрасываем страницу на 1
   useEffect(() => {
     setPage(1);
   }, [query]);
@@ -67,9 +66,7 @@ export function MovieList({ query }: MovieListProps) {
     }
 
     loadMovies();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [query, page, isOffline]);
 
   if (isOffline) {
@@ -77,30 +74,22 @@ export function MovieList({ query }: MovieListProps) {
       <Alert
         type="warning"
         showIcon
-        message="No internet connection"
+        title="No internet connection"
         description="Please check your network connection and try again."
       />
     );
   }
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', minHeight: 300, alignItems: 'center' }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
-
   if (error) {
-    return <Alert type="error" showIcon message="Failed to load movies" description={error} />;
+    return <Alert type="error" showIcon title="Failed to load movies" description={error} />;
   }
 
-  if (movies.length === 0) {
+  if (!loading && movies.length === 0) {
     return (
       <Alert
         type="info"
         showIcon
-        message="No movies found"
+        title="No movies found"
         description={`No results for "${query}". Try a different search term.`}
       />
     );
@@ -108,24 +97,52 @@ export function MovieList({ query }: MovieListProps) {
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 32 }}>
-        {movies.map((movie) => (
-          <MovieCard key={movie.id} movie={movie} />
-        ))}
+      <div style={{ position: 'relative', minHeight: 300 }}>
+        {loading && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: 'rgba(255,255,255,0.7)',
+              zIndex: 10,
+            }}
+          >
+            <Spin size="large" />
+          </div>
+        )}
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: 32,
+            opacity: loading ? 0.4 : 1,
+            transition: 'opacity 0.2s',
+          }}
+        >
+          {movies.map((movie) => (
+            <MovieCard key={movie.id} movie={movie} />
+          ))}
+        </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 32 }}>
-        <Pagination
-          current={page}
-          total={totalResults}
-          pageSize={20}
-          onChange={(newPage) => {
-            setPage(newPage);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          showSizeChanger={false}
-        />
-      </div>
+      {!loading && totalResults > 20 && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 32 }}>
+          <Pagination
+            current={page}
+            total={totalResults}
+            pageSize={20}
+            onChange={(newPage) => {
+              setPage(newPage);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            showSizeChanger={false}
+          />
+        </div>
+      )}
     </div>
   );
 }

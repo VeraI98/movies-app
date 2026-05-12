@@ -1,8 +1,11 @@
+'use client';
+
 import Image from 'next/image';
+import { useState } from 'react';
 import { format } from 'date-fns';
-import { Tag, Rate } from 'antd';
+import { Tag, Rate, message } from 'antd';
 import type { Movie } from '@/app/types/movie';
-import { IMAGE_BASE_URL, IMAGE_PLACEHOLDER } from '@/app/lib/moviedb';
+import { IMAGE_BASE_URL, IMAGE_PLACEHOLDER, addRating } from '@/app/lib/moviedb';
 import { truncateText } from '@/app/lib/truncateText';
 import { getRatingColor } from '@/app/lib/getRatingColor';
 
@@ -36,6 +39,9 @@ function RatingCircle({ rating }: { rating: number }) {
 }
 
 export function MovieCard({ movie }: MovieCardProps) {
+  const [userRating, setUserRating] = useState<number>(0);
+  const [messageApi, contextHolder] = message.useMessage();
+
   const posterUrl = movie.poster_path
     ? `${IMAGE_BASE_URL}${movie.poster_path}`
     : IMAGE_PLACEHOLDER;
@@ -46,91 +52,108 @@ export function MovieCard({ movie }: MovieCardProps) {
 
   const description = truncateText(movie.overview || 'No description available.', 200);
 
-  return (
-    <div
-      style={{
-        display: 'flex',
-        backgroundColor: '#fff',
-        borderRadius: 4,
-        overflow: 'hidden',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-        minHeight: 279,
-      }}
-    >
-      <div style={{ position: 'relative', width: 183, flexShrink: 0 }}>
-        <Image
-          src={posterUrl}
-          alt={movie.title}
-          fill
-          style={{ objectFit: 'cover' }}
-          sizes="183px"
-          unoptimized={!movie.poster_path}
-        />
-      </div>
+  async function handleRating(value: number) {
+    setUserRating(value);
+    try {
+      await addRating(movie.id, value);
+      messageApi.success('Rating saved!');
+    } catch {
+      messageApi.error('Failed to save rating');
+    }
+  }
 
+  return (
+    <>
+      {contextHolder}
       <div
         style={{
-          padding: '16px 16px 12px',
           display: 'flex',
-          flexDirection: 'column',
-          flex: 1,
-          minWidth: 0,
+          backgroundColor: '#fff',
+          borderRadius: 4,
+          overflow: 'hidden',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          minHeight: 279,
         }}
       >
+
+        <div style={{ position: 'relative', width: 183, flexShrink: 0 }}>
+          <Image
+            src={posterUrl}
+            alt={movie.title}
+            fill
+            style={{ objectFit: 'cover' }}
+            sizes="183px"
+            unoptimized={!movie.poster_path}
+          />
+        </div>
+
+
         <div
           style={{
+            padding: '16px 16px 12px',
             display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            gap: 8,
-            marginBottom: 4,
+            flexDirection: 'column',
+            flex: 1,
+            minWidth: 0,
           }}
         >
-          <h2
+
+          <div
             style={{
-              fontSize: 18,
-              fontWeight: 700,
-              color: '#000000D9',
-              margin: 0,
-              lineHeight: '22px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              gap: 8,
+              marginBottom: 4,
             }}
           >
-            {movie.title}
-          </h2>
-          <RatingCircle rating={movie.vote_average} />
+            <h2
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: '#000000D9',
+                margin: 0,
+                lineHeight: '22px',
+              }}
+            >
+              {movie.title}
+            </h2>
+            <RatingCircle rating={movie.vote_average} />
+          </div>
+
+          <p style={{ color: '#827E7E', fontSize: 12, margin: '0 0 8px' }}>
+            {releaseDate}
+          </p>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+            {PLACEHOLDER_GENRES.map((genre) => (
+              <Tag key={genre} style={{ margin: 0, borderRadius: 2, fontSize: 12 }}>
+                {genre}
+              </Tag>
+            ))}
+          </div>
+
+          <p
+            style={{
+              fontSize: 14,
+              color: '#000000D9',
+              lineHeight: '22px',
+              margin: '0 0 12px',
+              flex: 1,
+            }}
+          >
+            {description}
+          </p>
+
+          <Rate
+            allowHalf
+            value={userRating}
+            count={10}
+            onChange={handleRating}
+            style={{ fontSize: 16, color: '#F5A623' }}
+          />
         </div>
-
-        <p style={{ color: '#827E7E', fontSize: 12, margin: '0 0 8px' }}>
-          {releaseDate}
-        </p>
-
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-          {PLACEHOLDER_GENRES.map((genre) => (
-            <Tag key={genre} style={{ margin: 0, borderRadius: 2, fontSize: 12 }}>
-              {genre}
-            </Tag>
-          ))}
-        </div>
-
-        <p
-          style={{
-            fontSize: 14,
-            color: '#000000D9',
-            lineHeight: '22px',
-            margin: '0 0 12px',
-            flex: 1,
-          }}
-        >
-          {description}
-        </p>
-
-        <Rate
-          allowHalf
-          defaultValue={0}
-          count={10}
-          style={{ fontSize: 16, color: '#F5A623' }}
-        />
       </div>
-    </div>
+    </>
   );
 }
