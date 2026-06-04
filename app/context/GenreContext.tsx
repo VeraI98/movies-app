@@ -11,25 +11,36 @@ interface Genre {
 interface GenreContextType {
   genres: Genre[];
   getGenreName: (id: number) => string;
+  genreError: string | null;
 }
 
 const GenreContext = createContext<GenreContextType>({
   genres: [],
   getGenreName: () => 'Unknown',
+  genreError: null,
 });
 
 export function GenreProvider({ children }: { children: React.ReactNode }) {
   const [genres, setGenres] = useState<Genre[]>([]);
+  const [genreError, setGenreError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchGenres().then(setGenres).catch(console.error);
+    fetchGenres()
+      .then(setGenres)
+      .catch((err: Error) => {
+        setGenreError(err.message);
+      });
   }, []);
 
   function getGenreName(id: number): string {
     return genres.find((g) => g.id === id)?.name ?? 'Unknown';
   }
 
-  return <GenreContext.Provider value={{ genres, getGenreName }}>{children}</GenreContext.Provider>;
+  return (
+    <GenreContext.Provider value={{ genres, getGenreName, genreError }}>
+      {children}
+    </GenreContext.Provider>
+  );
 }
 
 export function useGenres() {

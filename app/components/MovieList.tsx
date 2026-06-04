@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Spin, Alert, Pagination } from 'antd';
 import { fetchMovies, fetchRatedMovies } from '@/app/lib/moviedb';
 import { useSession } from '@/app/context/SessionContext';
+import { useGenres } from '@/app/context/GenreContext';
 import { MovieCard } from './MovieCard';
 import type { Movie } from '@/app/types/movie';
 
@@ -14,6 +15,7 @@ interface MovieListProps {
 
 export function MovieList({ query, tab }: MovieListProps) {
   const { guestSessionId } = useSession();
+  const { genreError } = useGenres();
   const [movies, setMovies] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export function MovieList({ query, tab }: MovieListProps) {
   useEffect(() => {
     if (isOffline || !guestSessionId) return;
 
-    let cancelled = false;
+    const controller = new AbortController();
 
     async function loadMovies() {
       setLoading(true);
@@ -52,36 +54,36 @@ export function MovieList({ query, tab }: MovieListProps) {
 
         if (tab === 'rated') {
           data = await fetchRatedMovies(guestSessionId, page);
-          // Сохраняем рейтинги из ответа API
           const ratings: Record<number, number> = {};
           data.results.forEach((m: Movie & { rating?: number }) => {
             if (m.rating) ratings[m.id] = m.rating;
           });
-          if (!cancelled) setUserRatings((prev) => ({ ...prev, ...ratings }));
+          setUserRatings((prev) => ({ ...prev, ...ratings }));
         } else {
           data = await fetchMovies(query || 'return', page);
         }
 
-        if (!cancelled) {
-          setMovies(data.results);
-          setTotalResults(data.total_results);
-        }
+        setMovies(data.results);
+        setTotalResults(data.total_results);
       } catch (err) {
-        if (!cancelled) {
-          if (!navigator.onLine) {
-            setIsOffline(true);
-          } else {
-            setError(err instanceof Error ? err.message : 'Something went wrong');
-          }
+        if (err instanceof Error && err.name === 'AbortError') return;
+
+        if (!navigator.onLine) {
+          setIsOffline(true);
+        } else {
+          setError(err instanceof Error ? err.message : 'Something went wrong');
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     }
 
     loadMovies();
+
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [query, page, tab, isOffline, guestSessionId]);
 
@@ -96,6 +98,17 @@ export function MovieList({ query, tab }: MovieListProps) {
         showIcon
         title="No internet connection"
         description="Please check your network connection and try again."
+      />
+    );
+  }
+
+  if (genreError) {
+    return (
+      <Alert
+        type="warning"
+        showIcon
+        title="Failed to load genres"
+        description={genreError}
       />
     );
   }
