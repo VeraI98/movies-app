@@ -1,8 +1,7 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Input, Tabs } from 'antd';
-import debounce from 'lodash/debounce';
 
 interface HeaderProps {
   onSearch: (query: string) => void;
@@ -11,36 +10,34 @@ interface HeaderProps {
 }
 
 export function Header({ onSearch, onTabChange, activeTab }: HeaderProps) {
-  const debouncedSearch = useRef(
-    debounce((value: string) => {
-      onSearch(value);
-    }, 500),
-  ).current;
-
+  const [value, setValue] = useState('return');
+  useEffect(() => {
+    const timer = setTimeout(() => onSearch(value.trim()), 500);
+    return () => clearTimeout(timer);
+  }, [value, onSearch]);
   return (
-    <div style={{ padding: '0 16px' }}>
+    <header className="app-header">
+      <p className="eyebrow">YOUR NEXT MOVIE STARTS HERE</p>
+      <h1>Movie Search</h1>
+      <p className="subtitle">Find a story worth watching. Keep track of the films you rate.</p>
       <Tabs
         activeKey={activeTab}
-        centered
         onChange={onTabChange}
         items={[
-          { key: 'search', label: 'Search' },
-          { key: 'rated', label: 'Rated' },
+          { key: 'search', label: 'Search movies' },
+          { key: 'rated', label: 'My ratings' },
         ]}
-        style={{ marginBottom: 0 }}
       />
-
       {activeTab === 'search' && (
-        <div style={{ paddingBottom: 16 }}>
-          <Input
-            placeholder="Type to search..."
-            style={{ width: '100%' }}
-            size="large"
-            onChange={(e) => debouncedSearch(e.target.value)}
-            allowClear
-          />
-        </div>
+        <Input
+          aria-label="Search movies by title"
+          placeholder="Search by movie title…"
+          value={value}
+          size="large"
+          onChange={(e) => setValue(e.target.value)}
+          allowClear
+        />
       )}
-    </div>
+    </header>
   );
 }

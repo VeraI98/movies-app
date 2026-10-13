@@ -2,7 +2,7 @@ import type { MoviesResponse } from '@/app/types/movie';
 
 const BASE_URL = 'https://api.themoviedb.org/3';
 export const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500';
-export const IMAGE_PLACEHOLDER = '/no-poster.png';
+export const IMAGE_PLACEHOLDER = '/no-poster.svg';
 
 function getApiKey(): string {
   const key = process.env.NEXT_PUBLIC_MOVIEDB_API_KEY;
@@ -14,28 +14,27 @@ function getApiKey(): string {
   return key;
 }
 
-export async function createGuestSession(): Promise<string> {
+export async function createGuestSession(): Promise<{ id: string; expiresAt: string }> {
   const API_KEY = getApiKey();
-  const res = await fetch(
-    `${BASE_URL}/authentication/guest_session/new?api_key=${API_KEY}`,
-  );
+  const res = await fetch(`${BASE_URL}/authentication/guest_session/new?api_key=${API_KEY}`);
 
   if (!res.ok) {
     throw new Error(`Failed to create guest session: ${res.status}`);
   }
 
   const data = await res.json();
-  return data.guest_session_id;
+  return { id: data.guest_session_id, expiresAt: data.expires_at };
 }
 
 export async function fetchMovies(
   query: string = 'return',
   page: number = 1,
+  signal?: AbortSignal,
 ): Promise<MoviesResponse> {
   const API_KEY = getApiKey();
   const url = `${BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(query)}&page=${page}&include_adult=false`;
 
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`MovieDB API error: ${res.status}`);
   return res.json();
 }
@@ -43,20 +42,19 @@ export async function fetchMovies(
 export async function fetchRatedMovies(
   guestSessionId: string,
   page: number = 1,
+  signal?: AbortSignal,
 ): Promise<MoviesResponse> {
   const API_KEY = getApiKey();
   const url = `${BASE_URL}/guest_session/${guestSessionId}/rated/movies?api_key=${API_KEY}&page=${page}`;
 
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`MovieDB API error: ${res.status}`);
   return res.json();
 }
 
 export async function fetchGenres(): Promise<{ id: number; name: string }[]> {
   const API_KEY = getApiKey();
-  const res = await fetch(
-    `${BASE_URL}/genre/movie/list?api_key=${API_KEY}&language=en`,
-  );
+  const res = await fetch(`${BASE_URL}/genre/movie/list?api_key=${API_KEY}&language=en`);
 
   if (!res.ok) {
     throw new Error(`Failed to fetch genres: ${res.status}`);
@@ -75,9 +73,9 @@ export async function addRating(
   const res = await fetch(
     `${BASE_URL}/movie/${movieId}/rating?api_key=${API_KEY}&guest_session_id=${guestSessionId}`,
     {
-      method: 'POST',
+      method: rating === 0 ? 'DELETE' : 'POST',
       headers: { 'Content-Type': 'application/json;charset=utf-8' },
-      body: JSON.stringify({ value: rating }),
+      body: rating === 0 ? undefined : JSON.stringify({ value: rating }),
     },
   );
   if (!res.ok) throw new Error(`Failed to add rating: ${res.status}`);
