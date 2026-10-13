@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { Tag, Rate, message } from 'antd';
 import type { Movie } from '@/app/types/movie';
@@ -41,9 +42,14 @@ function RatingCircle({ rating }: { rating: number }) {
 export function MovieCard({ movie, userRating = 0, onRate }: MovieCardProps) {
   const { getGenreName } = useGenres();
   const { guestSessionId } = useSession();
+  const [saving, setSaving] = useState(false);
+  const [posterFailed, setPosterFailed] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
 
-  const posterUrl = movie.poster_path ? `${IMAGE_BASE_URL}${movie.poster_path}` : IMAGE_PLACEHOLDER;
+  const posterUrl =
+    movie.poster_path && !posterFailed
+      ? `${IMAGE_BASE_URL}${movie.poster_path}`
+      : IMAGE_PLACEHOLDER;
 
   const releaseDate = movie.release_date
     ? format(new Date(movie.release_date), 'MMMM d, yyyy')
@@ -52,13 +58,16 @@ export function MovieCard({ movie, userRating = 0, onRate }: MovieCardProps) {
   const description = truncateText(movie.overview || 'No description available.', 200);
 
   async function handleRating(value: number) {
-    if (!guestSessionId) return;
+    if (!guestSessionId || saving) return;
+    setSaving(true);
     try {
       await addRating(movie.id, value, guestSessionId);
       onRate?.(movie.id, value);
       messageApi.success('Rating saved!');
     } catch {
-      messageApi.error('Failed to save rating');
+      messageApi.error('Failed to save rating. Please try again.');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -66,6 +75,7 @@ export function MovieCard({ movie, userRating = 0, onRate }: MovieCardProps) {
     <>
       {contextHolder}
       <div
+        className="movie-card"
         style={{
           display: 'flex',
           backgroundColor: '#fff',
@@ -75,14 +85,15 @@ export function MovieCard({ movie, userRating = 0, onRate }: MovieCardProps) {
           minHeight: 279,
         }}
       >
-        <div style={{ position: 'relative', width: 183, flexShrink: 0 }}>
+        <div className="movie-poster">
           <Image
             src={posterUrl}
             alt={movie.title}
             fill
             style={{ objectFit: 'cover' }}
             sizes="183px"
-            unoptimized={!movie.poster_path}
+            unoptimized={!movie.poster_path || posterFailed}
+            onError={() => setPosterFailed(true)}
           />
         </div>
 
@@ -140,13 +151,19 @@ export function MovieCard({ movie, userRating = 0, onRate }: MovieCardProps) {
             {description}
           </p>
 
-          <Rate
-            allowHalf
-            value={userRating}
-            count={10}
-            onChange={handleRating}
-            style={{ fontSize: 16, color: '#F5A623' }}
-          />
+          <div className="rating-control" aria-label={`Your rating for ${movie.title}`}>
+            <span className="rating-label">
+              {saving ? 'Saving…' : userRating ? `Your rating: ${userRating}/10` : 'Your rating'}
+            </span>
+            <Rate
+              disabled={!guestSessionId || saving}
+              allowHalf
+              value={userRating}
+              count={10}
+              onChange={handleRating}
+              style={{ fontSize: 16, color: '#F5A623' }}
+            />
+          </div>
         </div>
       </div>
     </>

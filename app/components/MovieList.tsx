@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Spin, Alert, Pagination } from 'antd';
+import { Spin, Alert, Pagination, Button } from 'antd';
 import { fetchMovies, fetchRatedMovies } from '@/app/lib/moviedb';
 import { useSession } from '@/app/context/SessionContext';
 import { useGenres } from '@/app/context/GenreContext';
@@ -14,7 +14,7 @@ interface MovieListProps {
 }
 
 export function MovieList({ query, tab }: MovieListProps) {
-  const { guestSessionId } = useSession();
+  const { guestSessionId, sessionError, ratings, saveRating } = useSession();
   const { genreError } = useGenres();
   const [movies, setMovies] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,26 +22,23 @@ export function MovieList({ query, tab }: MovieListProps) {
   const [isOffline, setIsOffline] = useState(false);
   const [page, setPage] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
-  const [userRatings, setUserRatings] = useState<Record<number, number>>({});
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    setIsOffline(!navigator.onLine);
+    const timer = setTimeout(() => setIsOffline(!navigator.onLine), 0);
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
   useEffect(() => {
-    setPage(1);
-  }, [query, tab]);
-
-  useEffect(() => {
-    if (isOffline || !guestSessionId) return;
+    if (isOffline || (tab === 'rated' && !guestSessionId) || (tab === 'search' && !query)) return;
 
     const controller = new AbortController();
 
@@ -53,20 +50,16 @@ export function MovieList({ query, tab }: MovieListProps) {
         let data;
 
         if (tab === 'rated') {
-          data = await fetchRatedMovies(guestSessionId, page);
-          const ratings: Record<number, number> = {};
-          data.results.forEach((m: Movie & { rating?: number }) => {
-            if (m.rating) ratings[m.id] = m.rating;
-          });
-          setUserRatings((prev) => ({ ...prev, ...ratings }));
+          data = await fetchRatedMovies(guestSessionId, page, controller.signal);
         } else {
-          data = await fetchMovies(query || 'return', page);
+          data = await fetchMovies(query, page, controller.signal);
         }
 
+        if (controller.signal.aborted) return;
         setMovies(data.results);
         setTotalResults(data.total_results);
       } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') return;
+        if (controller.signal.aborted) return;
 
         if (!navigator.onLine) {
           setIsOffline(true);
@@ -85,10 +78,11 @@ export function MovieList({ query, tab }: MovieListProps) {
     return () => {
       controller.abort();
     };
-  }, [query, page, tab, isOffline, guestSessionId]);
+  }, [query, page, tab, isOffline, guestSessionId, retry]);
 
   function handleRate(movieId: number, rating: number) {
-    setUserRatings((prev) => ({ ...prev, [movieId]: rating }));
+    saveRating(movieId, rating);
+    if (tab === 'rated') setRetry((value) => value + 1);
   }
 
   if (isOffline) {
@@ -102,19 +96,31 @@ export function MovieList({ query, tab }: MovieListProps) {
     );
   }
 
-  if (genreError) {
+  if (tab === 'rated' && sessionError) {
+    return <Alert type="warning" showIcon title="Ratings unavailable" description={sessionError} />;
+  }
+
+  if (tab === 'search' && !query) {
     return (
       <Alert
-        type="warning"
+        type="info"
         showIcon
-        title="Failed to load genres"
-        description={genreError}
+        title="Find your next movie"
+        description="Enter a movie title in the search box above."
       />
     );
   }
 
   if (error) {
-    return <Alert type="error" showIcon title="Failed to load movies" description={error} />;
+    return (
+      <Alert
+        type="error"
+        showIcon
+        title="Failed to load movies"
+        description={error}
+        action={<Button onClick={() => setRetry((value) => value + 1)}>Try again</Button>}
+      />
+    );
   }
 
   if (!loading && movies.length === 0) {
@@ -134,6 +140,17 @@ export function MovieList({ query, tab }: MovieListProps) {
 
   return (
     <div>
+      {genreError && (
+        <Alert
+          type="warning"
+          showIcon
+          title="Genres unavailable"
+          description="You can still search and rate movies."
+        />
+      )}
+      {sessionError && (
+        <Alert type="warning" showIcon title="Ratings unavailable" description={sessionError} />
+      )}
       <div style={{ position: 'relative', minHeight: 300 }}>
         {loading && (
           <div
@@ -151,20 +168,12 @@ export function MovieList({ query, tab }: MovieListProps) {
           </div>
         )}
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: 32,
-            opacity: loading ? 0.4 : 1,
-            transition: 'opacity 0.2s',
-          }}
-        >
+        <div className="movie-grid" aria-busy={loading} style={{ opacity: loading ? 0.4 : 1 }}>
           {movies.map((movie) => (
             <MovieCard
               key={movie.id}
               movie={movie}
-              userRating={userRatings[movie.id] ?? 0}
+              userRating={ratings[movie.id] ?? movie.rating ?? 0}
               onRate={handleRate}
             />
           ))}
@@ -175,7 +184,7 @@ export function MovieList({ query, tab }: MovieListProps) {
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 32 }}>
           <Pagination
             current={page}
-            total={totalResults}
+            total={Math.min(totalResults, 10000)}
             pageSize={20}
             onChange={(newPage) => {
               setPage(newPage);
