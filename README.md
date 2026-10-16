@@ -6,7 +6,6 @@ A responsive frontend application built with **Next.js, React, TypeScript, and A
 
 [🌐 Live Demo](https://movies-app-sa4b.vercel.app/) · [💻 GitHub](https://github.com/VeraI98/movies-app)
 
-> The live demo shows the previous deployed version until the latest changes are redeployed.
 
 ---
 

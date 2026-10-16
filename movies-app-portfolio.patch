@@ -1,0 +1,1081 @@
+From 2a29fa054aacfe48ee65b27afac132d513fa9601 Mon Sep 17 00:00:00 2001
+From: VeraI98 <169138536+VeraI98@users.noreply.github.com>
+Date: Tue, 13 Oct 2026 06:32:43 +0300
+Subject: [PATCH] Polish movie search for portfolio and fix request and rating
+ handling
+
+---
+ .env.example                   |   1 +
+ .gitignore                     |   3 +-
+ README.md                      | 134 +++++++++++++++++++++------------
+ app/components/Header.tsx      |  45 ++++++-----
+ app/components/MovieCard.tsx   |  41 +++++++---
+ app/components/MovieList.tsx   |  81 +++++++++++---------
+ app/context/GenreContext.tsx   |   2 +-
+ app/context/SessionContext.tsx |  74 ++++++++++--------
+ app/globals.css                | 101 ++++++++++++++++++++++++-
+ app/lib/moviedb.ts             |  26 +++----
+ app/page.tsx                   |  24 +++---
+ docs/REVIEW.md                 |  24 ++++++
+ eslint.config.mjs              |  25 +++---
+ package.json                   |   8 +-
+ public/no-poster.svg           |   1 +
+ tests/moviedb.test.mjs         |  79 +++++++++++++++++++
+ 16 files changed, 464 insertions(+), 205 deletions(-)
+ create mode 100644 .env.example
+ create mode 100644 docs/REVIEW.md
+ create mode 100644 public/no-poster.svg
+ create mode 100644 tests/moviedb.test.mjs
+
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..d83a9cc
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1 @@
++NEXT_PUBLIC_MOVIEDB_API_KEY=your_tmdb_api_key
+diff --git a/.gitignore b/.gitignore
+index 88798af..0777cfc 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -37,4 +37,5 @@ yarn-error.log*
+ # typescript
+ *.tsbuildinfo
+ next-env.d.ts
+-.env*.local
+\ No newline at end of file
++.env*.local
++!.env.example
+diff --git a/README.md b/README.md
+index e3777dc..563ae99 100644
+--- a/README.md
++++ b/README.md
+@@ -1,56 +1,90 @@
+-# Movie Search App
++# Movie Search
+ 
+-A movie search application built with Next.js and the MovieDB API.
++A responsive movie discovery app built with **Next.js, TypeScript, and Ant Design**. Search by title, explore film details, and keep a list of movies you have rated using a TMDB guest session.
+ 
+-## Live Demo
++## Live demo
+ 
+-https://movies-app-sa4b.vercel.app/
++[Open Movie Search](https://movies-app-sa4b.vercel.app/)
++
++The existing deployment serves the previous version until these changes are merged and redeployed.
+ 
+ ## Features
+ 
+-- Search movies by title with debounce (0.5s delay)
+-- Pagination — 20 movies per page, server-side
+-- Star rating system — rates are saved to MovieDB via guest session
+-- Rated tab — shows only movies you have rated
+-- Real genres fetched from MovieDB API and displayed on each card
+-- Rating circle in the top-right corner of each card, color changes based on score
+-- Loading indicator shown during data fetch
+-- Error handling for API failures
+-- Offline detection — shows a warning if there is no internet connection
+-
+-## Tech Stack
+-
+-- Next.js 16 (App Router, TypeScript)
+-- Ant Design 6
+-- date-fns
+-- lodash (debounce)
+-- MovieDB API
+-
+-## Getting Started
+-
+-1. Clone the repository
+-2. Install dependencies:
+-   ```bash
+-   npm install
+-   ```
+-3. Create a `.env.local` file in the root folder:
+-   ```
+-   NEXT_PUBLIC_MOVIEDB_API_KEY=your_api_key_here
+-   ```
+-4. Start the development server:
+-   ```bash
+-   npm run dev
+-   ```
+-5. Open http://localhost:3000
+-
+-## Get API Key
+-
+-Register at https://www.themoviedb.org and get a free API key at
+-https://www.themoviedb.org/settings/api
+-
+-## Code Quality
+-
+-- ESLint — code linting
+-- Prettier — code formatting  
+-- Husky — runs linting before every git push
+-- lint-staged — runs checks only on changed files
+\ No newline at end of file
++- Movie search with a 500 ms debounce and cancellation of outdated requests.
++- Paginated results, with the page reset when the query or tab changes.
++- Movie posters, release dates, genres, summaries, and community scores.
++- Personal ratings from 0.5 to 10; click the selected rating again to remove it.
++- A **My ratings** tab backed by TMDB.
++- Responsive cards for desktop and mobile, including a fallback for missing or broken posters.
++- Loading, empty, offline, and API error states, with a retry button for failed requests.
++- Search remains available when guest sessions or genre requests fail.
++
++## Stack
++
++Next.js 16 App Router · React 19 · TypeScript · Ant Design 6 · date-fns · TMDB REST API
++
++## Run locally
++
++Requires Node.js 20.9+ and a TMDB API key.
++
++```bash
++git clone https://github.com/VeraI98/movies-app.git
++cd movies-app
++npm ci
++cp .env.example .env.local
++```
++
++Set your key in `.env.local`:
++
++```dotenv
++NEXT_PUBLIC_MOVIEDB_API_KEY=your_tmdb_api_key
++```
++
++Request a key in your [TMDB account settings](https://www.themoviedb.org/settings/api). This app uses the API key, rather than the API Read Access Token.
++
++```bash
++npm run dev
++```
++
++Open [localhost:3000](http://localhost:3000).
++
++## Quality checks
++
++```bash
++npm run lint
++npm run typecheck
++npm test
++npm run build
++```
++
++API tests use mocked fetch responses; no credentials or live TMDB access are required.
++
++## Architecture
++
++| Location                         | Responsibility                                                |
++| -------------------------------- | ------------------------------------------------------------- |
++| `app/page.tsx`                   | Search query, selected tab, and page layout                   |
++| `app/components/Header.tsx`      | Search input and debounced query updates                      |
++| `app/components/MovieList.tsx`   | Fetching, pagination, request cancellation, and result states |
++| `app/components/MovieCard.tsx`   | Movie details, poster fallback, and rating submission         |
++| `app/context/SessionContext.tsx` | Guest session and shared in-memory rating updates             |
++| `app/context/GenreContext.tsx`   | Shared genre dictionary                                       |
++| `app/lib/moviedb.ts`             | Typed TMDB API functions                                      |
++
++## Deployment
++
++Import the repository into Vercel, set `NEXT_PUBLIC_MOVIEDB_API_KEY`, and deploy. Changing a `NEXT_PUBLIC_` variable requires a new build. This variable is included in the browser bundle; do not use this pattern for private server credentials.
++
++The Vercel URL above responded successfully during preparation. Configure the repository homepage to use the same address.
++
++## Limitations
++
++Ratings belong to a temporary TMDB guest session, not a permanent user account. The session is stored in the current browser when local storage is available. TMDB may expire or invalidate it; ratings are unavailable when session creation fails. Ratings already saved on TMDB are displayed when **My ratings** is loaded; in-session changes also appear in search results.
++
++## Portfolio description
++
++> Developed a movie search application with Next.js and TypeScript, integrating the TMDB REST API for movie search, genres, pagination, and guest-session ratings. Implemented debounced search, request cancellation, responsive cards, and loading, empty, offline, and error states.
++
++This is an educational project by [VeraI98](https://github.com/VeraI98).
++
++Movie data and images are provided by [TMDB](https://www.themoviedb.org/). This product uses the TMDB API but is not endorsed or certified by TMDB.
+diff --git a/app/components/Header.tsx b/app/components/Header.tsx
+index 79d41a6..9ddf624 100644
+--- a/app/components/Header.tsx
++++ b/app/components/Header.tsx
+@@ -1,8 +1,7 @@
+ 'use client';
+ 
+-import { useRef } from 'react';
++import { useEffect, useState } from 'react';
+ import { Input, Tabs } from 'antd';
+-import debounce from 'lodash/debounce';
+ 
+ interface HeaderProps {
+   onSearch: (query: string) => void;
+@@ -11,36 +10,34 @@ interface HeaderProps {
+ }
+ 
+ export function Header({ onSearch, onTabChange, activeTab }: HeaderProps) {
+-  const debouncedSearch = useRef(
+-    debounce((value: string) => {
+-      onSearch(value);
+-    }, 500),
+-  ).current;
+-
++  const [value, setValue] = useState('return');
++  useEffect(() => {
++    const timer = setTimeout(() => onSearch(value.trim()), 500);
++    return () => clearTimeout(timer);
++  }, [value, onSearch]);
+   return (
+-    <div style={{ padding: '0 16px' }}>
++    <header className="app-header">
++      <p className="eyebrow">YOUR NEXT MOVIE STARTS HERE</p>
++      <h1>Movie Search</h1>
++      <p className="subtitle">Find a story worth watching. Keep track of the films you rate.</p>
+       <Tabs
+         activeKey={activeTab}
+-        centered
+         onChange={onTabChange}
+         items={[
+-          { key: 'search', label: 'Search' },
+-          { key: 'rated', label: 'Rated' },
++          { key: 'search', label: 'Search movies' },
++          { key: 'rated', label: 'My ratings' },
+         ]}
+-        style={{ marginBottom: 0 }}
+       />
+-
+       {activeTab === 'search' && (
+-        <div style={{ paddingBottom: 16 }}>
+-          <Input
+-            placeholder="Type to search..."
+-            style={{ width: '100%' }}
+-            size="large"
+-            onChange={(e) => debouncedSearch(e.target.value)}
+-            allowClear
+-          />
+-        </div>
++        <Input
++          aria-label="Search movies by title"
++          placeholder="Search by movie title…"
++          value={value}
++          size="large"
++          onChange={(e) => setValue(e.target.value)}
++          allowClear
++        />
+       )}
+-    </div>
++    </header>
+   );
+ }
+diff --git a/app/components/MovieCard.tsx b/app/components/MovieCard.tsx
+index 64eb90f..297e700 100644
+--- a/app/components/MovieCard.tsx
++++ b/app/components/MovieCard.tsx
+@@ -1,6 +1,7 @@
+ 'use client';
+ 
+ import Image from 'next/image';
++import { useState } from 'react';
+ import { format } from 'date-fns';
+ import { Tag, Rate, message } from 'antd';
+ import type { Movie } from '@/app/types/movie';
+@@ -41,9 +42,14 @@ function RatingCircle({ rating }: { rating: number }) {
+ export function MovieCard({ movie, userRating = 0, onRate }: MovieCardProps) {
+   const { getGenreName } = useGenres();
+   const { guestSessionId } = useSession();
++  const [saving, setSaving] = useState(false);
++  const [posterFailed, setPosterFailed] = useState(false);
+   const [messageApi, contextHolder] = message.useMessage();
+ 
+-  const posterUrl = movie.poster_path ? `${IMAGE_BASE_URL}${movie.poster_path}` : IMAGE_PLACEHOLDER;
++  const posterUrl =
++    movie.poster_path && !posterFailed
++      ? `${IMAGE_BASE_URL}${movie.poster_path}`
++      : IMAGE_PLACEHOLDER;
+ 
+   const releaseDate = movie.release_date
+     ? format(new Date(movie.release_date), 'MMMM d, yyyy')
+@@ -52,13 +58,16 @@ export function MovieCard({ movie, userRating = 0, onRate }: MovieCardProps) {
+   const description = truncateText(movie.overview || 'No description available.', 200);
+ 
+   async function handleRating(value: number) {
+-    if (!guestSessionId) return;
++    if (!guestSessionId || saving) return;
++    setSaving(true);
+     try {
+       await addRating(movie.id, value, guestSessionId);
+       onRate?.(movie.id, value);
+       messageApi.success('Rating saved!');
+     } catch {
+-      messageApi.error('Failed to save rating');
++      messageApi.error('Failed to save rating. Please try again.');
++    } finally {
++      setSaving(false);
+     }
+   }
+ 
+@@ -66,6 +75,7 @@ export function MovieCard({ movie, userRating = 0, onRate }: MovieCardProps) {
+     <>
+       {contextHolder}
+       <div
++        className="movie-card"
+         style={{
+           display: 'flex',
+           backgroundColor: '#fff',
+@@ -75,14 +85,15 @@ export function MovieCard({ movie, userRating = 0, onRate }: MovieCardProps) {
+           minHeight: 279,
+         }}
+       >
+-        <div style={{ position: 'relative', width: 183, flexShrink: 0 }}>
++        <div className="movie-poster">
+           <Image
+             src={posterUrl}
+             alt={movie.title}
+             fill
+             style={{ objectFit: 'cover' }}
+             sizes="183px"
+-            unoptimized={!movie.poster_path}
++            unoptimized={!movie.poster_path || posterFailed}
++            onError={() => setPosterFailed(true)}
+           />
+         </div>
+ 
+@@ -140,13 +151,19 @@ export function MovieCard({ movie, userRating = 0, onRate }: MovieCardProps) {
+             {description}
+           </p>
+ 
+-          <Rate
+-            allowHalf
+-            value={userRating}
+-            count={10}
+-            onChange={handleRating}
+-            style={{ fontSize: 16, color: '#F5A623' }}
+-          />
++          <div className="rating-control" aria-label={`Your rating for ${movie.title}`}>
++            <span className="rating-label">
++              {saving ? 'Saving…' : userRating ? `Your rating: ${userRating}/10` : 'Your rating'}
++            </span>
++            <Rate
++              disabled={!guestSessionId || saving}
++              allowHalf
++              value={userRating}
++              count={10}
++              onChange={handleRating}
++              style={{ fontSize: 16, color: '#F5A623' }}
++            />
++          </div>
+         </div>
+       </div>
+     </>
+diff --git a/app/components/MovieList.tsx b/app/components/MovieList.tsx
+index eff23e2..b3af3c6 100644
+--- a/app/components/MovieList.tsx
++++ b/app/components/MovieList.tsx
+@@ -1,7 +1,7 @@
+ 'use client';
+ 
+ import { useEffect, useState } from 'react';
+-import { Spin, Alert, Pagination } from 'antd';
++import { Spin, Alert, Pagination, Button } from 'antd';
+ import { fetchMovies, fetchRatedMovies } from '@/app/lib/moviedb';
+ import { useSession } from '@/app/context/SessionContext';
+ import { useGenres } from '@/app/context/GenreContext';
+@@ -14,7 +14,7 @@ interface MovieListProps {
+ }
+ 
+ export function MovieList({ query, tab }: MovieListProps) {
+-  const { guestSessionId } = useSession();
++  const { guestSessionId, sessionError, ratings, saveRating } = useSession();
+   const { genreError } = useGenres();
+   const [movies, setMovies] = useState<Movie[]>([]);
+   const [loading, setLoading] = useState(true);
+@@ -22,26 +22,23 @@ export function MovieList({ query, tab }: MovieListProps) {
+   const [isOffline, setIsOffline] = useState(false);
+   const [page, setPage] = useState(1);
+   const [totalResults, setTotalResults] = useState(0);
+-  const [userRatings, setUserRatings] = useState<Record<number, number>>({});
++  const [retry, setRetry] = useState(0);
+ 
+   useEffect(() => {
+     const handleOnline = () => setIsOffline(false);
+     const handleOffline = () => setIsOffline(true);
+     window.addEventListener('online', handleOnline);
+     window.addEventListener('offline', handleOffline);
+-    setIsOffline(!navigator.onLine);
++    const timer = setTimeout(() => setIsOffline(!navigator.onLine), 0);
+     return () => {
++      clearTimeout(timer);
+       window.removeEventListener('online', handleOnline);
+       window.removeEventListener('offline', handleOffline);
+     };
+   }, []);
+ 
+   useEffect(() => {
+-    setPage(1);
+-  }, [query, tab]);
+-
+-  useEffect(() => {
+-    if (isOffline || !guestSessionId) return;
++    if (isOffline || (tab === 'rated' && !guestSessionId) || (tab === 'search' && !query)) return;
+ 
+     const controller = new AbortController();
+ 
+@@ -53,20 +50,16 @@ export function MovieList({ query, tab }: MovieListProps) {
+         let data;
+ 
+         if (tab === 'rated') {
+-          data = await fetchRatedMovies(guestSessionId, page);
+-          const ratings: Record<number, number> = {};
+-          data.results.forEach((m: Movie & { rating?: number }) => {
+-            if (m.rating) ratings[m.id] = m.rating;
+-          });
+-          setUserRatings((prev) => ({ ...prev, ...ratings }));
++          data = await fetchRatedMovies(guestSessionId, page, controller.signal);
+         } else {
+-          data = await fetchMovies(query || 'return', page);
++          data = await fetchMovies(query, page, controller.signal);
+         }
+ 
++        if (controller.signal.aborted) return;
+         setMovies(data.results);
+         setTotalResults(data.total_results);
+       } catch (err) {
+-        if (err instanceof Error && err.name === 'AbortError') return;
++        if (controller.signal.aborted) return;
+ 
+         if (!navigator.onLine) {
+           setIsOffline(true);
+@@ -85,10 +78,11 @@ export function MovieList({ query, tab }: MovieListProps) {
+     return () => {
+       controller.abort();
+     };
+-  }, [query, page, tab, isOffline, guestSessionId]);
++  }, [query, page, tab, isOffline, guestSessionId, retry]);
+ 
+   function handleRate(movieId: number, rating: number) {
+-    setUserRatings((prev) => ({ ...prev, [movieId]: rating }));
++    saveRating(movieId, rating);
++    if (tab === 'rated') setRetry((value) => value + 1);
+   }
+ 
+   if (isOffline) {
+@@ -102,19 +96,31 @@ export function MovieList({ query, tab }: MovieListProps) {
+     );
+   }
+ 
+-  if (genreError) {
++  if (tab === 'rated' && sessionError) {
++    return <Alert type="warning" showIcon title="Ratings unavailable" description={sessionError} />;
++  }
++
++  if (tab === 'search' && !query) {
+     return (
+       <Alert
+-        type="warning"
++        type="info"
+         showIcon
+-        title="Failed to load genres"
+-        description={genreError}
++        title="Find your next movie"
++        description="Enter a movie title in the search box above."
+       />
+     );
+   }
+ 
+   if (error) {
+-    return <Alert type="error" showIcon title="Failed to load movies" description={error} />;
++    return (
++      <Alert
++        type="error"
++        showIcon
++        title="Failed to load movies"
++        description={error}
++        action={<Button onClick={() => setRetry((value) => value + 1)}>Try again</Button>}
++      />
++    );
+   }
+ 
+   if (!loading && movies.length === 0) {
+@@ -134,6 +140,17 @@ export function MovieList({ query, tab }: MovieListProps) {
+ 
+   return (
+     <div>
++      {genreError && (
++        <Alert
++          type="warning"
++          showIcon
++          title="Genres unavailable"
++          description="You can still search and rate movies."
++        />
++      )}
++      {sessionError && (
++        <Alert type="warning" showIcon title="Ratings unavailable" description={sessionError} />
++      )}
+       <div style={{ position: 'relative', minHeight: 300 }}>
+         {loading && (
+           <div
+@@ -151,20 +168,12 @@ export function MovieList({ query, tab }: MovieListProps) {
+           </div>
+         )}
+ 
+-        <div
+-          style={{
+-            display: 'grid',
+-            gridTemplateColumns: 'repeat(2, 1fr)',
+-            gap: 32,
+-            opacity: loading ? 0.4 : 1,
+-            transition: 'opacity 0.2s',
+-          }}
+-        >
++        <div className="movie-grid" aria-busy={loading} style={{ opacity: loading ? 0.4 : 1 }}>
+           {movies.map((movie) => (
+             <MovieCard
+               key={movie.id}
+               movie={movie}
+-              userRating={userRatings[movie.id] ?? 0}
++              userRating={ratings[movie.id] ?? movie.rating ?? 0}
+               onRate={handleRate}
+             />
+           ))}
+@@ -175,7 +184,7 @@ export function MovieList({ query, tab }: MovieListProps) {
+         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 32 }}>
+           <Pagination
+             current={page}
+-            total={totalResults}
++            total={Math.min(totalResults, 10000)}
+             pageSize={20}
+             onChange={(newPage) => {
+               setPage(newPage);
+@@ -187,4 +196,4 @@ export function MovieList({ query, tab }: MovieListProps) {
+       )}
+     </div>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/app/context/GenreContext.tsx b/app/context/GenreContext.tsx
+index 70490d0..ebfa572 100644
+--- a/app/context/GenreContext.tsx
++++ b/app/context/GenreContext.tsx
+@@ -45,4 +45,4 @@ export function GenreProvider({ children }: { children: React.ReactNode }) {
+ 
+ export function useGenres() {
+   return useContext(GenreContext);
+-}
+\ No newline at end of file
++}
+diff --git a/app/context/SessionContext.tsx b/app/context/SessionContext.tsx
+index 4694c49..9df7e58 100644
+--- a/app/context/SessionContext.tsx
++++ b/app/context/SessionContext.tsx
+@@ -5,56 +5,68 @@ import { createGuestSession } from '@/app/lib/moviedb';
+ 
+ const SESSION_KEY = 'moviedb_guest_session_id';
+ const SESSION_EXPIRY_KEY = 'moviedb_guest_session_expiry';
+-
+ interface SessionContextType {
+   guestSessionId: string;
++  sessionError: string | null;
++  ratings: Record<number, number>;
++  saveRating: (id: number, value: number) => void;
+ }
+-
+ const SessionContext = createContext<SessionContextType>({
+   guestSessionId: '',
++  sessionError: null,
++  ratings: {},
++  saveRating: () => {},
+ });
+-
+ export function SessionProvider({ children }: { children: React.ReactNode }) {
+   const [guestSessionId, setGuestSessionId] = useState('');
+-
++  const [sessionError, setSessionError] = useState<string | null>(null);
++  const [ratings, setRatings] = useState<Record<number, number>>({});
+   useEffect(() => {
++    let active = true;
+     async function initSession() {
+-      const savedId = localStorage.getItem(SESSION_KEY);
+-      const savedExpiry = localStorage.getItem(SESSION_EXPIRY_KEY);
+-      const isValid =
+-        savedId &&
+-        savedExpiry &&
+-        new Date(savedExpiry) > new Date();
+-
+-
+-      if (isValid && savedId) {
+-        setGuestSessionId(savedId);
+-      } else {
++      try {
++        let savedId: string | null = null;
++        let savedExpiry: string | null = null;
+         try {
+-          const newId = await createGuestSession();
+-
+-          localStorage.setItem(SESSION_KEY, newId);
+-          const expiry = new Date();
+-          expiry.setHours(expiry.getHours() + 24);
+-          localStorage.setItem(SESSION_EXPIRY_KEY, expiry.toISOString());
+-
+-          setGuestSessionId(newId);
+-        } catch (error) {
+-          console.error('Failed to create guest session:', error);
++          savedId = localStorage.getItem(SESSION_KEY);
++          savedExpiry = localStorage.getItem(SESSION_EXPIRY_KEY);
++        } catch {
++          /* Browsing still works when storage is blocked. */
++        }
++        const session =
++          savedId && savedExpiry && new Date(savedExpiry) > new Date()
++            ? { id: savedId, expiresAt: savedExpiry }
++            : await createGuestSession();
++        const { id } = session;
++        if (!active) return;
++        setGuestSessionId(id);
++        if (id !== savedId) {
++          try {
++            localStorage.setItem(SESSION_KEY, id);
++            localStorage.setItem(SESSION_EXPIRY_KEY, new Date(session.expiresAt).toISOString());
++          } catch {
++            /* Keep the session in memory. */
++          }
+         }
++      } catch {
++        if (active)
++          setSessionError('Ratings are unavailable. Reload the page to try connecting again.');
+       }
+     }
+-
+-    initSession();
++    void initSession();
++    return () => {
++      active = false;
++    };
+   }, []);
+-
++  function saveRating(id: number, value: number) {
++    setRatings((previous) => ({ ...previous, [id]: value }));
++  }
+   return (
+-    <SessionContext.Provider value={{ guestSessionId }}>
++    <SessionContext.Provider value={{ guestSessionId, sessionError, ratings, saveRating }}>
+       {children}
+     </SessionContext.Provider>
+   );
+ }
+-
+ export function useSession() {
+   return useContext(SessionContext);
+-}
+\ No newline at end of file
++}
+diff --git a/app/globals.css b/app/globals.css
+index a3ec98f..9239dbd 100644
+--- a/app/globals.css
++++ b/app/globals.css
+@@ -3,13 +3,106 @@
+   padding: 0;
+   margin: 0;
+ }
+-
+ html,
+ body {
+   min-height: 100vh;
+-  background-color: #f4f4f4;
++  background: #f1f4f8;
++  color: #17283c;
++  font-family: Arial, Helvetica, sans-serif;
++}
++.app-shell {
++  max-width: 1120px;
++  min-height: 100vh;
++  margin: auto;
++  background: #fff;
++}
++.app-header {
++  padding: 40px 32px 20px;
++  border-bottom: 1px solid #e7edf3;
++}
++.eyebrow {
++  font-size: 11px;
++  font-weight: 700;
++  letter-spacing: 2px;
++  color: #537ba4;
++  margin-bottom: 12px;
++}
++h1 {
++  font-size: clamp(28px, 5vw, 40px);
++  letter-spacing: -1px;
++}
++.subtitle {
++  color: #637386;
++  margin: 12px 0 20px;
++  line-height: 1.6;
++}
++main {
++  padding: 28px 32px;
++}
++.movie-grid {
++  display: grid;
++  grid-template-columns: repeat(2, minmax(0, 1fr));
++  gap: 24px;
++  transition: opacity 0.2s;
++}
++.movie-poster {
++  position: relative;
++  width: 155px;
++  flex-shrink: 0;
++  background: #e8edf2;
++}
++.movie-card {
++  border: 1px solid #e7edf3;
++}
++.rating-label {
++  display: block;
++  font-size: 11px;
++  color: #637386;
++  margin-bottom: 5px;
++}
++.rating-control .ant-rate {
++  display: flex;
++  gap: 2px;
++  flex-wrap: wrap;
++}
++.rating-control .ant-rate-star {
++  margin-inline-end: 0 !important;
++}
++footer {
++  padding: 24px 32px;
++  font-size: 11px;
++  color: #637386;
++  line-height: 1.6;
++  border-top: 1px solid #e7edf3;
++}
++.ant-alert {
++  margin-bottom: 16px;
+ }
+-
+ .ant-tabs-nav::before {
+   display: none !important;
+-}
+\ No newline at end of file
++}
++@media (max-width: 900px) {
++  .movie-grid {
++    grid-template-columns: 1fr;
++  }
++  .movie-poster {
++    width: 183px;
++  }
++}
++@media (max-width: 480px) {
++  .app-header {
++    padding: 28px 16px 16px;
++  }
++  main {
++    padding: 20px 12px;
++  }
++  .movie-poster {
++    width: 100px;
++  }
++  .movie-grid {
++    gap: 16px;
++  }
++  footer {
++    padding: 20px 16px;
++  }
++}
+diff --git a/app/lib/moviedb.ts b/app/lib/moviedb.ts
+index bdf612e..06d2eb0 100644
+--- a/app/lib/moviedb.ts
++++ b/app/lib/moviedb.ts
+@@ -2,7 +2,7 @@ import type { MoviesResponse } from '@/app/types/movie';
+ 
+ const BASE_URL = 'https://api.themoviedb.org/3';
+ export const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500';
+-export const IMAGE_PLACEHOLDER = '/no-poster.png';
++export const IMAGE_PLACEHOLDER = '/no-poster.svg';
+ 
+ function getApiKey(): string {
+   const key = process.env.NEXT_PUBLIC_MOVIEDB_API_KEY;
+@@ -14,28 +14,27 @@ function getApiKey(): string {
+   return key;
+ }
+ 
+-export async function createGuestSession(): Promise<string> {
++export async function createGuestSession(): Promise<{ id: string; expiresAt: string }> {
+   const API_KEY = getApiKey();
+-  const res = await fetch(
+-    `${BASE_URL}/authentication/guest_session/new?api_key=${API_KEY}`,
+-  );
++  const res = await fetch(`${BASE_URL}/authentication/guest_session/new?api_key=${API_KEY}`);
+ 
+   if (!res.ok) {
+     throw new Error(`Failed to create guest session: ${res.status}`);
+   }
+ 
+   const data = await res.json();
+-  return data.guest_session_id;
++  return { id: data.guest_session_id, expiresAt: data.expires_at };
+ }
+ 
+ export async function fetchMovies(
+   query: string = 'return',
+   page: number = 1,
++  signal?: AbortSignal,
+ ): Promise<MoviesResponse> {
+   const API_KEY = getApiKey();
+   const url = `${BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(query)}&page=${page}&include_adult=false`;
+ 
+-  const res = await fetch(url);
++  const res = await fetch(url, { signal });
+   if (!res.ok) throw new Error(`MovieDB API error: ${res.status}`);
+   return res.json();
+ }
+@@ -43,20 +42,19 @@ export async function fetchMovies(
+ export async function fetchRatedMovies(
+   guestSessionId: string,
+   page: number = 1,
++  signal?: AbortSignal,
+ ): Promise<MoviesResponse> {
+   const API_KEY = getApiKey();
+   const url = `${BASE_URL}/guest_session/${guestSessionId}/rated/movies?api_key=${API_KEY}&page=${page}`;
+ 
+-  const res = await fetch(url);
++  const res = await fetch(url, { signal });
+   if (!res.ok) throw new Error(`MovieDB API error: ${res.status}`);
+   return res.json();
+ }
+ 
+ export async function fetchGenres(): Promise<{ id: number; name: string }[]> {
+   const API_KEY = getApiKey();
+-  const res = await fetch(
+-    `${BASE_URL}/genre/movie/list?api_key=${API_KEY}&language=en`,
+-  );
++  const res = await fetch(`${BASE_URL}/genre/movie/list?api_key=${API_KEY}&language=en`);
+ 
+   if (!res.ok) {
+     throw new Error(`Failed to fetch genres: ${res.status}`);
+@@ -75,10 +73,10 @@ export async function addRating(
+   const res = await fetch(
+     `${BASE_URL}/movie/${movieId}/rating?api_key=${API_KEY}&guest_session_id=${guestSessionId}`,
+     {
+-      method: 'POST',
++      method: rating === 0 ? 'DELETE' : 'POST',
+       headers: { 'Content-Type': 'application/json;charset=utf-8' },
+-      body: JSON.stringify({ value: rating }),
++      body: rating === 0 ? undefined : JSON.stringify({ value: rating }),
+     },
+   );
+   if (!res.ok) throw new Error(`Failed to add rating: ${res.status}`);
+-}
+\ No newline at end of file
++}
+diff --git a/app/page.tsx b/app/page.tsx
+index 135d4f7..75702b3 100644
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -7,22 +7,16 @@ import { MovieList } from '@/app/components/MovieList';
+ export default function HomePage() {
+   const [query, setQuery] = useState('return');
+   const [tab, setTab] = useState('search');
+-
+   return (
+-    <div style={{ minHeight: '100vh', backgroundColor: '#f4f4f4' }}>
+-      <div
+-        style={{
+-          maxWidth: 1010,
+-          margin: '0 auto',
+-          backgroundColor: '#fff',
+-          minHeight: '100vh',
+-        }}
+-      >
+-        <Header onSearch={setQuery} onTabChange={setTab} activeTab={tab} />
+-        <main style={{ padding: '32px 16px' }}>
+-          <MovieList query={query} tab={tab} />
+-        </main>
+-      </div>
++    <div className="app-shell">
++      <Header onSearch={setQuery} onTabChange={setTab} activeTab={tab} />
++      <main>
++        <MovieList key={`${tab}:${query}`} query={query} tab={tab} />
++      </main>
++      <footer>
++        Movie data and images provided by TMDB. This product uses the TMDB API but is not endorsed
++        or certified by TMDB.
++      </footer>
+     </div>
+   );
+ }
+diff --git a/docs/REVIEW.md b/docs/REVIEW.md
+new file mode 100644
+index 0000000..235e9c4
+--- /dev/null
++++ b/docs/REVIEW.md
+@@ -0,0 +1,24 @@
++# Portfolio polish review
++
++## Completed
++
++- Responsive layout, poster fallback, search header, and rating labels.
++- Search no longer waits for a guest session.
++- Outdated movie requests are cancelled; query/tab changes reset pagination.
++- Rating removal sends DELETE rather than an invalid zero POST.
++- Session failures are visible, and genre failures do not block results.
++- Debounce cleanup and controlled search input preserve the query across tabs.
++- Guest session expiry uses the timestamp returned by TMDB.
++- Next.js 16 lint configuration, API regression tests, environment example, and portfolio README.
++
++## Validation
++
++Passed: ESLint, TypeScript, six mocked API tests, production build, and git diff whitespace checks.
++
++Browser scenario tests and screenshots were not completed: downloading the test browser failed. Live TMDB calls were not tested with a real API key. Before merging, verify desktop and mobile search, pagination, rating changes/removal, offline recovery, and the rated list on a valid guest session. An unused or expired guest session can be invalidated by TMDB.
++
++## Publishing
++
++The existing demo https://movies-app-sa4b.vercel.app/ returned HTTP 200. The repository homepage https://movies-app-blond-ten.vercel.app returned DEPLOYMENT_NOT_FOUND. Update the GitHub homepage after confirming the desired deployment.
++
++GitHub rejected creation of the portfolio-polish branch with HTTP 403 (Resource not accessible by integration). No remote changes were made.
+diff --git a/eslint.config.mjs b/eslint.config.mjs
+index 8023d25..4140f93 100644
+--- a/eslint.config.mjs
++++ b/eslint.config.mjs
+@@ -1,14 +1,11 @@
+-import { dirname } from 'path';
+-import { fileURLToPath } from 'url';
+-import { FlatCompat } from '@eslint/eslintrc';
+-
+-const __filename = fileURLToPath(import.meta.url);
+-const __dirname = dirname(__filename);
+-
+-const compat = new FlatCompat({ baseDirectory: __dirname });
+-
+-const eslintConfig = [
+-  ...compat.extends('next/core-web-vitals', 'next/typescript', 'prettier'),
+-];
+-
+-export default eslintConfig;
++import { defineConfig, globalIgnores } from 'eslint/config';
++import nextVitals from 'eslint-config-next/core-web-vitals';
++import nextTs from 'eslint-config-next/typescript';
++import prettier from 'eslint-config-prettier';
++
++export default defineConfig([
++  ...nextVitals,
++  ...nextTs,
++  prettier,
++  globalIgnores(['.next/**', 'out/**', 'next-env.d.ts']),
++]);
+diff --git a/package.json b/package.json
+index e6e309a..5c815ab 100644
+--- a/package.json
++++ b/package.json
+@@ -6,11 +6,13 @@
+     "dev": "next dev",
+     "build": "next build",
+     "start": "next start",
+-    "lint": "next lint",
+-    "lint:fix": "next lint --fix",
++    "lint": "eslint .",
++    "lint:fix": "eslint . --fix",
+     "format": "prettier --write .",
+     "format:check": "prettier --check .",
+-    "prepare": "husky"
++    "prepare": "husky",
++    "typecheck": "tsc --noEmit",
++    "test": "node --test tests/*.test.mjs"
+   },
+   "dependencies": {
+     "@ant-design/nextjs-registry": "^1.3.0",
+diff --git a/public/no-poster.svg b/public/no-poster.svg
+new file mode 100644
+index 0000000..3cb63e4
+--- /dev/null
++++ b/public/no-poster.svg
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450"><rect width="300" height="450" fill="#e8edf2"/><rect x="100" y="155" width="100" height="80" rx="12" fill="none" stroke="#8897a8" stroke-width="4"/><path d="m135 175 40 20-40 20z" fill="#8897a8"/><text x="150" y="275" text-anchor="middle" font-family="sans-serif" font-size="17" fill="#536477">No poster available</text></svg>
+diff --git a/tests/moviedb.test.mjs b/tests/moviedb.test.mjs
+new file mode 100644
+index 0000000..4990194
+--- /dev/null
++++ b/tests/moviedb.test.mjs
+@@ -0,0 +1,79 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import vm from 'node:vm';
++import ts from 'typescript';
++
++function api(fetch, key = 'test-key') {
++  const source = ts.transpileModule(fs.readFileSync('app/lib/moviedb.ts', 'utf8'), {
++    compilerOptions: { module: ts.ModuleKind.CommonJS },
++  }).outputText;
++  const exports = {};
++  vm.runInNewContext(source, {
++    exports,
++    fetch,
++    process: { env: { NEXT_PUBLIC_MOVIEDB_API_KEY: key } },
++  });
++  return exports;
++}
++
++test('search encodes the query and forwards cancellation', async () => {
++  const controller = new AbortController();
++  let request;
++  const client = api(async (url, options) => {
++    request = { url: new URL(url), options };
++    return { ok: true, json: async () => ({ results: [] }) };
++  });
++  await client.fetchMovies('A & B 한국', 3, controller.signal);
++  assert.equal(request.url.searchParams.get('query'), 'A & B 한국');
++  assert.equal(request.url.searchParams.get('page'), '3');
++  assert.equal(request.options.signal, controller.signal);
++});
++
++test('rated movies forwards pagination and cancellation', async () => {
++  const controller = new AbortController();
++  const client = api(async (url, options) => {
++    assert.equal(new URL(url).pathname, '/3/guest_session/guest/rated/movies');
++    assert.equal(new URL(url).searchParams.get('page'), '2');
++    assert.equal(options.signal, controller.signal);
++    return { ok: true, json: async () => ({ results: [] }) };
++  });
++  await client.fetchRatedMovies('guest', 2, controller.signal);
++});
++
++test('rating writes and removal use distinct HTTP methods', async () => {
++  const requests = [];
++  const client = api(async (_, options) => {
++    requests.push(options);
++    return { ok: true };
++  });
++  await client.addRating(1, 7.5, 'guest');
++  await client.addRating(1, 0, 'guest');
++  assert.equal(requests[0].method, 'POST');
++  assert.equal(JSON.parse(requests[0].body).value, 7.5);
++  assert.equal(requests[1].method, 'DELETE');
++  assert.equal(requests[1].body, undefined);
++});
++
++test('guest session preserves the expiry returned by TMDB', async () => {
++  const client = api(async () => ({
++    ok: true,
++    json: async () => ({ guest_session_id: 'guest', expires_at: '2030-01-01 00:00:00 UTC' }),
++  }));
++  const session = await client.createGuestSession();
++  assert.equal(session.id, 'guest');
++  assert.equal(session.expiresAt, '2030-01-01 00:00:00 UTC');
++});
++
++test('HTTP failures surface instead of becoming empty results', async () => {
++  const client = api(async () => ({ ok: false, status: 503 }));
++  await assert.rejects(client.fetchMovies('test'), /503/);
++  await assert.rejects(client.addRating(1, 5, 'guest'), /503/);
++});
++
++test('missing API key gives a useful configuration error', async () => {
++  const client = api(() => {
++    throw new Error('fetch must not run');
++  }, '');
++  await assert.rejects(client.fetchMovies('test'), /NEXT_PUBLIC_MOVIEDB_API_KEY/);
++});
+-- 
+2.51.1
+
